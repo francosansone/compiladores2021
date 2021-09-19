@@ -31,6 +31,7 @@ data Ty =
 data STy =
       SNatTy
     | SFunTy STy STy
+    | SSynType Name
     deriving (Show,Eq)
 
 type Name = String
@@ -52,8 +53,17 @@ data Decl a = Decl
 -- | tipo de datos para declaraciones azucaradas
 data SDecl a = SDecl
   { declSPos  :: Pos
+  , declIsRec :: Bool
   , declSName :: Name
+  , declSType :: STy
+  , declSBinders :: [(Name, STy)]
   , declSBody :: a
+  } |
+  SDeclType
+  {
+    declSPos  :: Pos
+  , declSTName :: Name
+  , declSType :: STy
   }
   deriving (Show, Functor)
 

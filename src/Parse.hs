@@ -20,6 +20,7 @@ import Text.ParserCombinators.Parsec.Language --( GenLanguageDef(..), emptyDef )
 import qualified Text.Parsec.Expr as Ex
 import Text.Parsec.Expr (Operator, Assoc)
 import Control.Monad.Identity (Identity)
+import Lang (SDecl(SDecl))
 
 type P = Parsec String ()
 
@@ -32,7 +33,7 @@ lexer = Tok.makeTokenParser $
         emptyDef {
          commentLine    = "#",
          reservedNames = ["let", "let rec", "fun", "fix", "then", "else","in",
-                           "ifz", "print","Nat"],
+                           "ifz", "print","Nat", "type"],
          reservedOpNames = ["->",":","=","+","-"]
         }
 
@@ -74,6 +75,7 @@ getPos = do pos <- getPosition
 tyatom :: P STy
 tyatom = (reserved "Nat" >> return SNatTy)
          <|> parens typeP
+         <|> SSynType <$> var
 
 typeP :: P STy
 typeP = try (do
@@ -156,14 +158,15 @@ fix = do i <- getPos
          reservedOp "->"
          SFix i ((f, fty):((x, xty): binders)) <$> expr
 
+isrec :: P Bool
+isrec = try(do reserved "rec"; return True ) <|> return False
+
 letexp :: P STerm
 letexp =  do
   i <- getPos
   reserved "let"
-  try (
-    do reserved "rec"
-       bodylet True i)
-    <|> (do bodylet False i)
+  b <- isrec
+  bodylet b i
 
 --- parsers para el resto del termino let
 --- un resultado con binders vacio seria equivalente a un let sin azucar
@@ -191,13 +194,28 @@ tm :: P STerm
 tm = app <|> lam <|> ifz <|> printOp <|> fix <|> letexp
 
 -- | Parser de declaraciones
+
 decl :: P (SDecl STerm)
-decl = do
+decl = declSTerm <|> typedecl
+
+declSTerm :: P (SDecl STerm)
+declSTerm = do
      i <- getPos
      reserved "let"
+     b <- isrec
      v <- var
+     binders <- many (parens binding)
+     reservedOp ":"
+     ty <- typeP
      reservedOp "="
-     SDecl i v <$> expr
+     SDecl i b v ty binders <$> expr
+
+typedecl :: P (SDecl a)
+typedecl = do i <- getPos
+              reserved "type"
+              name <- var
+              reserved "="
+              SDeclType i name <$> typeP
 
 -- | Parser de programas (listas de declaraciones) 
 program :: P [SDecl STerm]
