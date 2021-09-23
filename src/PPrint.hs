@@ -66,6 +66,8 @@ typeColor = annotate (color Blue <> italicized)
 typeOpColor = annotate (colorDull Blue)
 defColor = annotate (colorDull Magenta <> italicized)
 nameColor = id
+defTypeColor = annotate (colorDull Cyan <> italicized)
+
 
 -- | Pretty printer de nombres (Doc)
 name2doc :: Name -> Doc AnsiStyle
@@ -189,8 +191,7 @@ sty2doc (SSynType n) = typeColor (pretty n)
 
 -- | Pretty printing de declaraciones con azucar
 sppDecl :: MonadFD4 m => SDecl STerm -> m String
-sppDecl (SDecl p isrec x t binders b) = do
-  gdecl <- gets glb
+sppDecl (SDecl p isrec x t binders b) =
   return (render $ sep ([defColor (pretty "let")
                        , name2doc x
                        ] ++ concatMap (\(x, t) ->
@@ -204,7 +205,7 @@ sppDecl (SDecl p isrec x t binders b) = do
                        , sty2doc t
                        , defColor (pretty "=")])
                    <+> nest 2 (st2doc False b))
-sppDecl (SDeclType p n sty) = return ""
+sppDecl (SDeclType p n sty) = return (render $ sep [defTypeColor (pretty "type"), pretty "=", sty2doc sty])
 
 scollectApp :: STerm -> (STerm, [STerm])
 scollectApp t = go [] t where
