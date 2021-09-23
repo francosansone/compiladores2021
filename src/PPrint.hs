@@ -205,7 +205,7 @@ sppDecl (SDecl p isrec x t binders b) =
                        , sty2doc t
                        , defColor (pretty "=")])
                    <+> nest 2 (st2doc False b))
-sppDecl (SDeclType p n sty) = return (render $ sep [defTypeColor (pretty "type"), pretty "=", sty2doc sty])
+sppDecl (SDeclType p n sty) = return (render $ sep [defTypeColor (pretty "type"), name2doc n, pretty "=", sty2doc sty])
 
 scollectApp :: STerm -> (STerm, [STerm])
 scollectApp t = go [] t where
