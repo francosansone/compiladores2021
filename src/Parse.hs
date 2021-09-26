@@ -119,6 +119,12 @@ binding = do v <- var
              ty <- typeP
              return (v, ty)
 
+multibinders :: P [(Name, STy)]
+multibinders = do vs <- many var
+                  reservedOp ":"
+                  ty <- typeP
+                  return (map (\x -> (x, ty)) vs)
+
 lam :: P STerm
 lam = do i <- getPos
          reserved "fun"

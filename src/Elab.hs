@@ -10,7 +10,7 @@ Este módulo permite elaborar términos y declaraciones para convertirlas desde
 fully named (@NTerm) a locally closed (@Term@) 
 -}
 
-module Elab ( elab, desugarSdecl ) where
+module Elab ( elab, desugarSdecl, elabAndDesugar ) where
 
 import Lang
 import Subst
@@ -23,6 +23,11 @@ import Data.Maybe (isNothing, fromJust)
 -- en un término dado. 
 elab :: NTerm -> Term
 elab = elab' []
+
+elabAndDesugar :: MonadFD4 m => STerm -> m Term
+elabAndDesugar s = do
+  t <- desugarSterm s
+  return $ elab t
 
 elab' :: [Name] -> NTerm -> Term
 elab' env (V p v) =
@@ -72,7 +77,7 @@ desugarSterm (SPrint info str) = return (Lam info "x" NatTy (Print info str (V i
 desugarSterm (SBinaryOp info op sexp1 sexp2) = do
   exp1 <- desugarSterm sexp1
   exp2 <- desugarSterm sexp2
-  return (BinaryOp info op exp1 exp1)
+  return (BinaryOp info op exp1 exp2)
 desugarSterm (SFix info ((y, ysty):((x, xsty):xs)) exp) = do
   yty <- slookupTy ysty
   typeExist info yty
