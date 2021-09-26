@@ -19,6 +19,7 @@ module MonadFD4 (
   runFD4,
   lookupDecl,
   lookupTy,
+  lookupSTy,
   printFD4,
   setLastFile,
   getLastFile,
@@ -27,6 +28,7 @@ module MonadFD4 (
   failFD4,
   addDecl,
   addTy,
+  addSynTy,
   catchErrors,
   MonadFD4,
   module Control.Monad.Except,
@@ -70,12 +72,16 @@ getLastFile = gets lfile
 
 addDecl :: MonadFD4 m => Decl Term -> m ()
 addDecl d = modify (\s -> s { glb = d : glb s, cantDecl = cantDecl s + 1 })
-  
+
 addTy :: MonadFD4 m => Name -> Ty -> m ()
 addTy n ty = modify (\s -> s { tyEnv = (n,ty) : tyEnv s })
 
+-- agrega un sinonimo de tipo
+addSynTy :: MonadFD4 m => Name -> STy -> m ()
+addSynTy n sty = modify (\s -> s { typeSyn = (n, sty) : typeSyn s })
+
 eraseLastFileDecls :: MonadFD4 m => m ()
-eraseLastFileDecls = do 
+eraseLastFileDecls = do
       s <- get
       let n = cantDecl s
           (era,rem) = splitAt n (glb s)
@@ -97,6 +103,13 @@ lookupTy nm = do
       s <- get
       return $ lookup nm (tyEnv s)
 
+-- busca tipo del sinonimo dado
+lookupSTy :: MonadFD4 m => Name -> m (Maybe STy)
+lookupSTy nm = do
+      s <- get
+      return $ lookup nm (typeSyn s)
+
+
 failPosFD4 :: MonadFD4 m => Pos -> String -> m a
 failPosFD4 p s = throwError (ErrPos p s)
 
@@ -104,8 +117,8 @@ failFD4 :: MonadFD4 m => String -> m a
 failFD4 = failPosFD4 NoPos
 
 catchErrors  :: MonadFD4 m => m a -> m (Maybe a)
-catchErrors c = catchError (Just <$> c) 
-                           (\e -> liftIO $ hPutStrLn stderr (show e) 
+catchErrors c = catchError (Just <$> c)
+                           (\e -> liftIO $ hPutStrLn stderr (show e)
                               >> return Nothing)
 
 ----
