@@ -211,11 +211,11 @@ declSTerm = do
      reserved "let"
      b <- isrec
      v <- var
-     binders <- many (parens binding)
+     binders <- many (parens multibinders)
      reservedOp ":"
      ty <- typeP
      reservedOp "="
-     SDecl i b v ty binders <$> expr
+     SDecl i b v ty (concat binders) <$> expr
 
 typedecl :: P (SDecl a)
 typedecl = do i <- getPos
