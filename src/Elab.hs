@@ -94,13 +94,17 @@ desugarSterm (SLet False info f sty [] st1 st2) = do
   t1 <- desugarSterm st1
   t2 <- desugarSterm st2
   return $ Let info f (fromJust ty) t1 t2
-desugarSterm (SLet False info f sty ((x, xty):xs)  st1 st2) = desugarSterm (SLet False info f (SFunTy xty sty) xs (SLam info [(x, xty)] st1) st2)
-desugarSterm (SLet b info n sty binders sexp1 sexp2) = do
+desugarSterm (SLet False info f sty ((x, xty):xs)  st1 st2) = 
+  desugarSterm (SLet False info f (SFunTy xty sty) xs (SLam info [(x, xty)] st1) st2)
+desugarSterm (SLet True info n sty binders sexp1 sexp2) = do
   ty <- slookupTy sty
   typeExist info ty
+  let binders' = (n, sty):binders
+  let t1 = typeFromBinders binders'
+  t2 <- slookupTy t1
   exp2 <- desugarSterm sexp2
-  exp1 <- desugarSterm (SFix info binders sexp1)
-  return (Let info n (fromJust ty) exp1 exp2)
+  exp1 <- desugarSterm (SFix info ((n, typeFromBinders binders'):binders) sexp1)
+  return (Let info n (fromJust t2)  exp1 exp2)
 desugarSterm _ = failPosFD4 NoPos "desugarSterm: esto no deberia haber pasado"
 
 slookupTy :: MonadFD4 m => STy -> m (Maybe Ty)
