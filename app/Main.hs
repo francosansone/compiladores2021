@@ -36,6 +36,7 @@ import Eval ( eval )
 import PPrint ( pp , ppTy, ppDecl, sppDecl )
 import MonadFD4
 import TypeChecker ( tc, tcDecl, tyDecl )
+import CEK ( evalCEK )
 
 prompt :: String
 prompt = "FD4> "
@@ -46,7 +47,7 @@ prompt = "FD4> "
 data Mode =
     Interactive
   | Typecheck
-  -- | InteractiveCEK
+  | InteractiveCEK
   -- | Bytecompile 
   -- | RunVM
   -- | CC
@@ -58,7 +59,7 @@ data Mode =
 parseMode :: Parser (Mode,Bool)
 parseMode = (,) <$>
       (flag' Typecheck ( long "typecheck" <> short 't' <> help "Chequear tipos e imprimir el término")
-  -- <|> flag' InteractiveCEK (long "interactiveCEK" <> short 'k' <> help "Ejecutar interactivamente en la CEK")
+      <|> flag' InteractiveCEK (long "interactiveCEK" <> short 'k' <> help "Ejecutar interactivamente en la CEK")
   -- <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
   -- <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
       <|> flag Interactive Interactive ( long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva")
@@ -89,7 +90,9 @@ main = execParser opts >>= go
                  return ()
     go (Typecheck,opt, files) =
               runOrFail $ mapM_ (typecheckFile opt) files
-    -- go (InteractiveCEK,_, files) = undefined
+    go (InteractiveCEK,_, files) =
+              do runFD4 (runInputT defaultSettings (repl files))
+                 return ()
     -- go (Bytecompile,_, files) =
     --           runOrFail $ mapM_ bytecompileFile files
     -- go (RunVM,_,files) =
@@ -191,7 +194,7 @@ handleDecl (SDeclType p b t) = do
   tyDecl d
 handleDecl d = do
         (Decl p x tt) <- typecheckDecl d
-        te <- eval tt
+        te <- evalCEK tt
         addDecl (Decl p x te)
 
 filterDecls :: SDecl STerm -> Bool
@@ -286,7 +289,7 @@ handleTerm st = do
          tt <- elabAndDesugar st
          s <- get
          ty <- tc tt (tyEnv s)
-         te <- eval tt
+         te <- evalCEK tt
          ppte <- pp te
          printFD4 (ppte ++ " : " ++ ppTy ty)
 
