@@ -36,14 +36,14 @@ search (V _ (Free x)) e k = do
     case t of
         Just u -> search u e k
         Nothing -> failFD4 $ "Error en runtime. Variable " ++ x ++ " no declarada."
-search (Const _ n) e k = destroy (VNat n) k
-search (Lam _ n nty t) e k = destroy (VClos $ ClosFun e n nty t) k
-search (Fix _ f fty x xty t) e k = destroy (VClos $ ClosFix e f fty x xty t) k
 search (V _ (Global x)) e k = do
     t <- lookupDecl x
     case t of
         Just u -> search u e k
         Nothing -> failFD4 $ "Error en runtime. Variable " ++ x ++ " no declarada."
+search (Const _ n) e k = destroy (VNat n) k
+search (Lam _ n nty t) e k = destroy (VClos $ ClosFun e n nty t) k
+search (Fix _ f fty x xty t) e k = destroy (VClos $ ClosFix e f fty x xty t) k
 search (Let _ n nty t u) e k = search t e (KLet e n t:k)
 -- search p _ _ = failFD4 "Esto no debería haber pasado"
 
