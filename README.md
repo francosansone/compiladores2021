@@ -39,5 +39,6 @@ Usage: compiladores-exe [(-t|--typecheck) | (-i|--interactive)] [FILES...]
 Available options:
   -t,--typecheck           Solo chequear tipos
   -i,--interactive         Ejecutar en forma interactiva
+  -k, --interactiveCEK     Ejecutar en forma interactiva usando la VM CEK
   -h,--help                Show this help text
 ```
