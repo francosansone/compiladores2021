@@ -14,7 +14,7 @@ module Elab ( elab, desugarSdecl, elabAndDesugar ) where
 
 import Lang
 import Subst
-import MonadFD4 (failPosFD4, MonadFD4, lookupTy, addTy, lookupSTy)
+import MonadFD4 (failPosFD4, MonadFD4, lookupSTy)
 import Common (Pos(NoPos))
 import Control.Monad (when)
 import Data.Maybe (isNothing, fromJust)
@@ -30,12 +30,12 @@ elabAndDesugar s = do
   return $ elab t
 
 elab' :: [Name] -> NTerm -> Term
-elab' env (V p v) =
+elab' env (V p v) = V p (Free v)
   -- Tenemos que hver si la variable es Global o es un nombre local
   -- En env llevamos la lista de nombres locales.
-  if v `elem` env
-    then  V p (Free v)
-    else V p (Global v)
+  -- if v `elem` env
+  --   then  V p (Free v)
+  --   else V p (Global v)
 
 elab' _ (Const p c) = Const p c
 elab' env (Lam p v ty t) = Lam p v ty (close v (elab' (v:env) t))
@@ -57,7 +57,7 @@ desugarSdecl (SDecl p True n sty binders body) = do
 desugarSdecl (SDecl p False n sty binders body) = do
   b <- desugarSterm $ SLam p binders body
   return (Decl p n b)
-desugarSdecl (SDeclType p n sty) = failPosFD4 p "Esto no debería haber pasado"
+desugarSdecl (SDeclType p n sty) = failPosFD4 p "desugarSdecl: Esto no debería haber pasado"
 
 
 desugarSterm :: MonadFD4 m => STerm  -> m NTerm

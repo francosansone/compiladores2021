@@ -49,8 +49,8 @@ data Mode =
     Interactive
   | Typecheck
   | InteractiveCEK
-  -- | Bytecompile 
-  -- | RunVM
+  | Bytecompile
+  | RunVM
   -- | CC
   -- | Canon
   -- | LLVM
@@ -61,8 +61,8 @@ parseMode :: Parser (Mode,Bool)
 parseMode = (,) <$>
       (flag' Typecheck ( long "typecheck" <> short 't' <> help "Chequear tipos e imprimir el término")
       <|> flag' InteractiveCEK (long "interactiveCEK" <> short 'k' <> help "Ejecutar interactivamente en la CEK")
-      -- <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
-  -- <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
+      <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
+      <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
       <|> flag Interactive Interactive ( long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva")
   -- <|> flag' CC ( long "cc" <> short 'c' <> help "Compilar a código C")
   -- <|> flag' Canon ( long "canon" <> short 'n' <> help "Imprimir canonicalización")
@@ -94,9 +94,15 @@ main = execParser opts >>= go
     go (InteractiveCEK,_, files) =
               do runFD4 (runInputT defaultSettings (repl InteractiveCEK files))
                  return ()
-    -- go (Bytecompile,_, files) =
-    --           runOrFail $ mapM_ bytecompileFile files
-    -- go (RunVM,_,files) =
+    go (Bytecompile,_, files) =
+              do res <- runFD4 (runInputT defaultSettings  (lift $ catchErrors $ mapM compileByteCode files))
+                 case res of
+                   Right (Just b) -> bcWrite (concat b) "a.out"
+                   _ -> return ()
+    go (RunVM,_,files) = do
+      bytecode <- bcRead (head files)
+      runBC bytecode
+      return ()
     --           runOrFail $ mapM_ bytecodeRun files
     -- go (CC,_, files) =
     --           runOrFail $ mapM_ ccFile files
@@ -137,6 +143,12 @@ repl' interpreter compiler args = do
                        c <- liftIO $ interpreter x
                        b <- lift $ catchErrors $ handleCommand c
                        maybe loop (`when` loop) b
+
+compileByteCode :: (MonadMask m, MonadFD4 m) => FilePath -> m Bytecode
+compileByteCode f = do
+    compileFile' return f
+    s <- get
+    bytecompileModule (reverse $ glb s)
 
 compileFiles ::  MonadFD4 m => [FilePath] -> m ()
 compileFiles []     = return ()
@@ -179,6 +191,17 @@ compileFile' ev f = do
     decls <- parseIO filename program x
     mapM_ (handleDecl ev) decls
 
+compileFileNoEval :: MonadFD4 m => FilePath -> m ()
+compileFileNoEval f = do
+    printFD4 ("Abriendo "++f++"...")
+    let filename = reverse(dropWhile isSpace (reverse f))
+    x <- liftIO $ catch (readFile filename)
+               (\e -> do let err = show (e :: IOException)
+                         hPutStrLn stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err)
+                         return "")
+    decls <- parseIO filename program x
+    mapM_ (handleDecl return) decls
+
 typecheckFile ::  MonadFD4 m => Bool -> FilePath -> m ()
 typecheckFile opt f = do
     printFD4  ("Chequeando "++f)
@@ -214,6 +237,16 @@ handleDecl ev d = do
         (Decl p x tt) <- typecheckDecl d
         te <- ev tt
         addDecl (Decl p x te)
+
+handleDeclNoEval :: MonadFD4 m => SDecl STerm -> m (Maybe (Decl Term))
+handleDeclNoEval (SDeclType p b t) = do
+  let d = SDeclType p b t
+  tyDecl d
+  return Nothing
+handleDeclNoEval d = do
+        (Decl p x tt) <- typecheckDecl d
+        addDecl (Decl p x tt)
+        return $ Just (Decl p x tt)
 
 filterDecls :: SDecl STerm -> Bool
 filterDecls SDeclType {} = False

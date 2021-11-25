@@ -1,0 +1,18 @@
+type n = Nat
+
+type m = n
+
+let succ (x:Nat) : Nat = x + 1
+
+let pred (x:Nat) : Nat = x -1
+
+let rec fibonacci (i:n) : n = 
+    ifz i then 0 else 
+        let p : n = pred(i) in ifz p then 1 else fibonacci(p) + fibonacci(pred(p))
+
+
+let f5 : Nat = print "fibonacci 5 is: " (fibonacci 5)
+
+let f8 : Nat = print "fibonacci 8 is: " (fibonacci 8)
+
+let f10 : Nat = print "fibonacci 10 is: " (fibonacci 10)

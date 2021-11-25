@@ -1,0 +1,3 @@
+let succ (x : Nat) : Nat = print "hola que tal" x + 1
+
+let x : Nat = succ 1

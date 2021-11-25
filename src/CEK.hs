@@ -36,16 +36,13 @@ search (V _ (Free x)) e k = do
     case t of
         Just u -> search u e k
         Nothing -> failFD4 $ "Error en runtime. Variable " ++ x ++ " no declarada."
-search (V _ (Global x)) e k = do
-    t <- lookupDecl x
-    case t of
-        Just u -> search u e k
-        Nothing -> failFD4 $ "Error en runtime. Variable " ++ x ++ " no declarada."
 search (Const _ n) e k = destroy (VNat n) k
 search (Lam _ n nty t) e k = destroy (VClos $ ClosFun e n nty t) k
 search (Fix _ f fty x xty t) e k = destroy (VClos $ ClosFix e f fty x xty t) k
-search (Let _ n nty t u) e k = search t e (KLet e n t:k)
--- search p _ _ = failFD4 "Esto no debería haber pasado"
+search (Let _ n nty t u) e k = search t e (KLet e n u:k)
+search _ _ k = do
+    printFD4 (show k) 
+    failFD4 "Esto no debería haber pasado"
 
 destroy :: MonadFD4 m => Val -> Kont -> m Val
 destroy v [] = return v
@@ -54,14 +51,15 @@ destroy v (KPrint str:k) = do
     destroy v k
 destroy n (KBinOp1 op e u : k) = search u e (KBinOp2 op n : k)
 destroy (VNat (CNat x)) (KBinOp2 Add (VNat (CNat y)) : k) = destroy (VNat (CNat $ x + y)) k
-destroy (VNat (CNat n1)) (KBinOp2 _ (VNat (CNat n2)) : k) = destroy (VNat $ CNat (n1 - n2)) k
+destroy (VNat (CNat n1)) (KBinOp2 _ (VNat (CNat n2)) : k) = destroy (VNat $ CNat (max 0 (n2 - n1))) k
 destroy (VNat (CNat 0)) (KIfZ e t u:k) = search t e k
 destroy (VNat (CNat n)) (KIfZ e t u:k) = search u e k
 destroy (VClos c) (KArg e t:k) = search t e (KClos c:k)
 destroy v (KClos (ClosFun e n nty t):k) = search t (v:e) k
-destroy v (KClos (ClosFix e f fty n nty t):k) = let ff = VClos $ ClosFix e f fty n nty t in search t (ff:(v:e)) k
+destroy v (KClos (ClosFix e f fty n nty t):k) = let ff = VClos $ ClosFix e f fty n nty t in search t (v:(ff:e)) k
 destroy v (KLet e n t:k) = search t (v:e) k
-destroy v k = failFD4 $ "[destroy] Esto no debería haber pasado " ++ show v  ++ show k
+destroy v k = do
+    failFD4 $ "[destroy] Esto no debería haber pasado\n" ++ show v ++ "\n"  ++ show k
 
 valToTerm :: Val -> Term
 valToTerm (VNat v) = Const NoPos v
