@@ -12,4 +12,4 @@ app/Main
 *.blg
 *.bbl
 compiladores.cabal
-
+material/
