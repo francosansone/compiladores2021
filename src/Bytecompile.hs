@@ -76,12 +76,13 @@ pattern DROP     = 12
 pattern PRINT    = 13
 pattern PRINTN   = 14
 pattern JUMP     = 15
+pattern TAILCALL = 16
 
 bc :: MonadFD4 m => Term -> m Bytecode
 bc (V _ (Bound n)) = return [ACCESS, n]
 bc (Const _ (CNat n)) = return [CONST, n]
-bc (Lam _ n _ t) = do b <- bc t
-                      return $ [FUNCTION, length b + 1] ++ b ++ [RETURN]
+bc (Lam _ n _ t) = do tc <- tailcall t
+                      return $ [FUNCTION, length tc + 1] ++ tc ++ [RETURN]
 bc (App _ t u) = do bt <- bc t
                     bu <- bc u
                     return $ bt ++ bu ++ [CALL]
@@ -105,6 +106,24 @@ bc (IfZ _ b e1 e2) = do bb <- bc b
                             lb2 = length be2 in
                           return $ bb ++ [IFZ, lb1 + 2] ++ be1 ++ [JUMP, lb2] ++ be2
 bc t = do printFD4 $ show t; return [STOP]
+
+-- Funcion auxiliar para compilar funciones en posicion de cola
+tailcall :: MonadFD4 m => Term -> m Bytecode
+tailcall (App _ a b) = do ba <- bc a
+                          bb <- bc b
+                          return $ ba ++ bb ++ [TAILCALL]
+tailcall (IfZ _ b e1 e2) = do bb <- bc b
+                              te1 <- tailcall e1
+                              te2 <- tailcall e2
+                              let
+                                  le1 = length te1
+                                  le2 = length te2 in
+                                return $ bb ++ [IFZ, le1 + 2] ++ te1 ++ [JUMP, le2] ++ te2
+tailcall (Let _ _ _ m n) = do   be1 <- bc m
+                                be2 <- tailcall n
+                                return $ be1 ++ [SHIFT] ++ be2
+tailcall t           = do bt <- bc t
+                          return $ bt  ++ [RETURN]
 
 type Module = [Decl Term]
 
@@ -147,6 +166,7 @@ runBC' (ADD:c) e (I x:(I y:s)) = runBC' c e (I (y + x):s)
 runBC' (SUB:c) e (I x:(I y:s)) = runBC' c e (I (y - x):s)
 runBC' (ACCESS:(i:c)) e s = runBC' c e (e!!i:s)
 runBC' (CALL:c) e (v:(Fun ef b:s)) = runBC' b (v:ef) (RA e c:s)
+runBC' (TAILCALL:r) e (v:Fun eg cg:ra@(RA ef cf):s) = runBC' cg (v:eg) (ra:s)
 runBC' (FUNCTION:(len:c)) e s = 
   let
     cf = take len c
@@ -173,7 +193,7 @@ runBC' (IFZ:(bb1:c)) e (x:s) =
     runBC' cf e s
 runBC' (JUMP:(n:c)) e s = runBC' (drop n c) e s
 runBC' (STOP:c) e s = return ()
-runBC' c _ s = error $ show c ++ ", " ++ show s  ++ " implementame"
+runBC' c _ s = error $ show c ++ ", " ++ show s  ++ " Error en tiempo de ejecucion."
 
 auxPrint :: Bytecode -> String -> IO (Bytecode)
 auxPrint (NULL:c) str = do print $ reverse str; return c

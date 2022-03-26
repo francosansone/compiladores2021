@@ -1,0 +1,5 @@
+let rec suma (m : Nat) (n : Nat) : Nat =
+    ifz n then m
+          else suma (1 + m) (n - 1)
+
+let x : Nat = suma 600 5

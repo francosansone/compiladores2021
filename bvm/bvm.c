@@ -284,10 +284,14 @@ void run(code init_c)
 			break;
 		}
 
-/*
+
 		case TAILCALL: {
+			value arg = *--s;   // Tomamos el primer elemento del stack (argumento de la llamada)
+			value fun = *--s;   // Tomamos la clausura de la funcion en pos de cola
+			c = fun.clo.clo_body;	// Saltamos a la funcion
+			e = env_push(fun.clo.clo_env, arg);	// Insertamos su entorno
+			break;
 		}
-*/
 
 		/* Para IFZ leemos el primer valor del stack. Dependiendo
 		 * si es o no 0 dependera el salto.
