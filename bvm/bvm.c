@@ -288,8 +288,22 @@ void run(code init_c)
 		case TAILCALL: {
 		}
 */
+
+		/* Para IFZ leemos el primer valor del stack. Dependiendo
+		 * si es o no 0 dependera el salto.
+		*/
 		case IFZ: {
-			quit("IFZ no implementado");
+			value cond = *(--s); 	// Extraemos el primer valor del stack
+								// y corremode un lugar la referencia
+			if (cond.i) { 		// Esto va a ser true si cond.i es
+								// distinto de 0... cosas de la vida
+				int len_branch_1 = *c++;  // Accedemos al tamaño de la rama verdadera.
+				c += len_branch_1; 		  // Saltamos hasta la rama falsa.
+			} else {
+				c++;			// Ignoramos el tamaño de la verdadera y procedemos
+								//  con la ejecucion.
+			}
+
 			break;
         }
         

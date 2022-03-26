@@ -75,12 +75,13 @@ pattern SHIFT    = 11
 pattern DROP     = 12
 pattern PRINT    = 13
 pattern PRINTN   = 14
+pattern JUMP     = 15
 
 bc :: MonadFD4 m => Term -> m Bytecode
 bc (V _ (Bound n)) = return [ACCESS, n]
 bc (Const _ (CNat n)) = return [CONST, n]
 bc (Lam _ n _ t) = do b <- bc t
-                      return $ [FUNCTION, length b] ++ b ++ [RETURN]
+                      return $ [FUNCTION, length b + 1] ++ b ++ [RETURN]
 bc (App _ t u) = do bt <- bc t
                     bu <- bc u
                     return $ bt ++ bu ++ [CALL]
@@ -95,14 +96,14 @@ bc (Let _ n t e1 e2) = do be1 <- bc e1
 bc (Print _ str n) = do bn <- bc n
                         return $ [PRINT] ++ map ord str ++ [NULL] ++ bn ++ [PRINTN]
 bc (Fix _ _ _ _ _ t) = do bt <- bc t
-                          return $ [FUNCTION, length bt] ++ bt ++ [RETURN, FIX]
+                          return $ [FUNCTION, length bt + 1] ++ bt ++ [RETURN, FIX]
 bc (IfZ _ b e1 e2) = do bb <- bc b
                         be1 <- bc e1
                         be2 <- bc e2
                         let 
                             lb1 = length be1
                             lb2 = length be2 in
-                          return $ bb ++ [IFZ, lb1, lb2] ++ be1 ++ be2
+                          return $ bb ++ [IFZ, lb1 + 2] ++ be1 ++ [JUMP, lb2] ++ be2
 bc t = do printFD4 $ show t; return [STOP]
 
 type Module = [Decl Term]
@@ -148,8 +149,8 @@ runBC' (ACCESS:(i:c)) e s = runBC' c e (e!!i:s)
 runBC' (CALL:c) e (v:(Fun ef b:s)) = runBC' b (v:ef) (RA e c:s)
 runBC' (FUNCTION:(len:c)) e s = 
   let
-    cf = take (len + 1) c
-    c' = drop (len + 1) c 
+    cf = take len c
+    c' = drop len c
   in
     runBC' c' e (Fun e cf:s)
 runBC' (RETURN:_) _ (v:(RA e c:s)) = runBC' c e (v:s)
@@ -164,17 +165,13 @@ runBC' (FIX:c) e ((Fun fe fc):s)        =
     efix = (Fun efix fc):fe
   in 
     runBC' c e ((Fun efix fc):s)
-runBC' (IFZ:(bb1:(bb2:c))) e ((I 0):s) =
-  let
-    ct = take bb1 c
-    c' = ct ++ drop (bb1 + bb2) c
-  in
-    runBC' c' e s
-runBC' (IFZ:(bb1:(bb2:c))) e (x:s) =
+runBC' (IFZ:(bb1:c)) e ((I 0):s) = runBC' c e s
+runBC' (IFZ:(bb1:c)) e (x:s) =
   let
     cf = drop bb1 c
   in
     runBC' cf e s
+runBC' (JUMP:(n:c)) e s = runBC' (drop n c) e s
 runBC' (STOP:c) e s = return ()
 runBC' c _ s = error $ show c ++ ", " ++ show s  ++ " implementame"
 

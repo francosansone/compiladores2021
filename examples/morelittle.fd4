@@ -1,0 +1,3 @@
+let z : Nat = ifz 1 then 1 else 2
+
+let x : Nat = let p : Nat = z in ifz p then 1 else 2
