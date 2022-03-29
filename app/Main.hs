@@ -69,9 +69,8 @@ parseMode = (,) <$>
   -- <|> flag' LLVM ( long "llvm" <> short 'l' <> help "Imprimir LLVM resultante")
   -- <|> flag' Build ( long "build" <> short 'b' <> help "Compilar")
       )
-   <*> pure False
    -- reemplazar por la siguiente línea para habilitar opción
-   -- <*> flag False True (long "optimize" <> short 'o' <> help "Optimizar código")
+   <*> flag False True (long "optimize" <> short 'o' <> help "Optimizar código")
 
 -- | Parser de opciones general, consiste de un modo y una lista de archivos a procesar
 parseArgs :: Parser (Mode,Bool, [FilePath])
@@ -94,8 +93,8 @@ main = execParser opts >>= go
     go (InteractiveCEK,_, files) =
               do runFD4 (runInputT defaultSettings (repl InteractiveCEK files))
                  return ()
-    go (Bytecompile,_, files) =
-              do res <- runFD4 (runInputT defaultSettings  (lift $ catchErrors $ mapM compileByteCode files))
+    go (Bytecompile, opt, files) =
+              do res <- runFD4 (runInputT defaultSettings  (lift $ catchErrors $ mapM (compileByteCode opt) files))
                  case res of
                    Right (Just b) -> bcWrite (concat b) "a.out"
                    _ -> return ()
@@ -144,11 +143,11 @@ repl' interpreter compiler args = do
                        b <- lift $ catchErrors $ handleCommand c
                        maybe loop (`when` loop) b
 
-compileByteCode :: (MonadMask m, MonadFD4 m) => FilePath -> m Bytecode
-compileByteCode f = do
+compileByteCode :: (MonadMask m, MonadFD4 m) => Bool -> FilePath -> m Bytecode
+compileByteCode b f = do
     compileFile' return f
     s <- get
-    bytecompileModule (reverse $ glb s)
+    bytecompileModule b (reverse $ glb s)
 
 compileFiles ::  MonadFD4 m => [FilePath] -> m ()
 compileFiles []     = return ()

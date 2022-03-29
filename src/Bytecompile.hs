@@ -101,7 +101,7 @@ bc (Fix _ _ _ _ _ t) = do bt <- bc t
 bc (IfZ _ b e1 e2) = do bb <- bc b
                         be1 <- bc e1
                         be2 <- bc e2
-                        let 
+                        let
                             lb1 = length be1
                             lb2 = length be2 in
                           return $ bb ++ [IFZ, lb1 + 2] ++ be1 ++ [JUMP, lb2] ++ be2
@@ -127,12 +127,16 @@ tailcall t           = do bt <- bc t
 
 type Module = [Decl Term]
 
-bytecompileModule :: MonadFD4 m => Module -> m Bytecode
-bytecompileModule m = do printFD4 $ show m
-                         printFD4 $ show (moduleToTerm m)
-                         l <- bc $ moduleToTerm m
-                         printFD4 $ show $ l ++ [PRINTN, STOP]
-                         return $ l ++ [PRINTN, STOP]
+bytecompileModule :: MonadFD4 m => Bool -> Module -> m Bytecode
+bytecompileModule opt m = do  printFD4 $ show (moduleToTerm m)
+                              m_op <- if opt then
+                                        optimizing 100 $ moduleToTerm m
+                                      else
+                                        optimizing 0 $ moduleToTerm m
+                              printFD4 $ show m_op
+                              l <- bc m_op
+                              printFD4 $ show $ l ++ [PRINTN, STOP]
+                              return $ l ++ [PRINTN, STOP]
 
 moduleToTerm :: Module -> Term
 moduleToTerm [Decl p n b] = b
@@ -167,7 +171,7 @@ runBC' (SUB:c) e (I x:(I y:s)) = runBC' c e (I (y - x):s)
 runBC' (ACCESS:(i:c)) e s = runBC' c e (e!!i:s)
 runBC' (CALL:c) e (v:(Fun ef b:s)) = runBC' b (v:ef) (RA e c:s)
 runBC' (TAILCALL:r) e (v:Fun eg cg:ra@(RA ef cf):s) = runBC' cg (v:eg) (ra:s)
-runBC' (FUNCTION:(len:c)) e s = 
+runBC' (FUNCTION:(len:c)) e s =
   let
     cf = take len c
     c' = drop len c
@@ -180,10 +184,10 @@ runBC' (PRINTN:c) e (I n:s) = do
   print $ show n
   runBC' c e (I n:s)
 runBC' (PRINT:c) e s = do c' <- auxPrint c ""; runBC' c' e s
-runBC' (FIX:c) e ((Fun fe fc):s)        = 
-  let 
+runBC' (FIX:c) e ((Fun fe fc):s)        =
+  let
     efix = (Fun efix fc):fe
-  in 
+  in
     runBC' c e ((Fun efix fc):s)
 runBC' (IFZ:(bb1:c)) e ((I 0):s) = runBC' c e s
 runBC' (IFZ:(bb1:c)) e (x:s) =
@@ -199,3 +203,65 @@ auxPrint :: Bytecode -> String -> IO (Bytecode)
 auxPrint (NULL:c) str = do print $ reverse str; return c
 auxPrint (x:c) str = auxPrint c (chr x:str)
 auxPrint _ _ = error "Error en PRINT"
+
+optimizing :: MonadFD4 m => Int -> Term -> m Term
+optimizing 0 t = return t
+optimizing n t = do t_op <- constanFolding t;
+                    t_op_2 <- constantPropagation t_op
+                    optimizing (n-1) t_op_2
+
+constanFolding :: MonadFD4 m => Term -> m Term
+constanFolding v@(V _ (Bound n)) = return v
+constanFolding c@(Const _ (CNat n)) = return c
+constanFolding (Lam i n ty t) = do body <- constanFolding t; return $ Lam i n ty body
+constanFolding (App i t u) = do t_op <- constanFolding t; u_op <- constanFolding u; return $ App i t_op u_op
+constanFolding (BinaryOp i op (Const _ (CNat t)) (Const _ (CNat u))) = return $ Const i (CNat $ t + u)
+constanFolding (Let i n t e1 e2) = do e1_op <- constanFolding e1
+                                      e2_op <- constanFolding e2
+                                      return $ Let i n t e1_op e2_op
+constanFolding (Print i str n) = do n_op <- constanFolding n; return $ Print i str n_op
+constanFolding (Fix i n1 t1 n2 t2 t) = do t_op <- constanFolding t; return $ Fix i n1 t1 n2 t2 t_op
+constanFolding (IfZ _ (Const _ c) e1 e2) = case c of
+                                              CNat 0 -> constanFolding e1
+                                              _      -> constanFolding e2
+constanFolding (IfZ i b e1 e2) = do b_op <- constanFolding b
+                                    e1_op <- constanFolding e1
+                                    e2_op <- constanFolding e2
+                                    return $ IfZ i b_op e1_op e2_op
+constanFolding t = return t
+
+constantPropagation :: MonadFD4 m => Term -> m Term
+constantPropagation (Let p v vty c@(Const _ _) e) = do  e_op <- constantPropagation $ replaceConstant c e
+                                                        return $ Let p v vty c e_op
+constantPropagation (Lam p y ty b) = do b_op <- constantPropagation b;
+                                                 return (Lam p y ty b_op)
+constantPropagation (App p l r) = do  l_op <- constantPropagation l
+                                      r_op <- constantPropagation r
+                                      return $ App p l_op r_op
+constantPropagation (Fix p f fty x xty t) = do  t_op <- constantPropagation t
+                                                return $ Fix p f fty x xty t_op
+constantPropagation (IfZ p c t e) = do  c_op <- constantPropagation c
+                                        t_op <- constantPropagation t
+                                        e_op <- constantPropagation e
+                                        return $ IfZ p c_op t_op e_op
+constantPropagation (Print p str t) = do  t_op <- constantPropagation t
+                                          return $ Print p str t_op
+constantPropagation (BinaryOp p op t u) = do  t_op <- constantPropagation t
+                                              u_op <- constantPropagation u
+                                              return $ BinaryOp p op t_op u_op
+constantPropagation t = return t
+
+replaceConstant :: Term -> Term -> Term
+replaceConstant = replaceConstant' 0
+
+replaceConstant' :: Int -> Term -> Term -> Term
+replaceConstant' n t v@(V _ (Bound i)) = if i == n then t else v
+replaceConstant' n t (Lam p y ty b) = Lam p y ty (replaceConstant' (n + 1) t b)
+replaceConstant' n t (App p l r) = App p (replaceConstant' n t l) (replaceConstant' n t r)
+replaceConstant' n t (Fix p f fty x xty b) = Fix p f fty x xty (replaceConstant' (n + 1) t b)
+replaceConstant' n t (IfZ p c l r) = IfZ p (replaceConstant' n t c) (replaceConstant' n t l) (replaceConstant' n t r)
+replaceConstant' n t c@(Const _ _) = c
+replaceConstant' n t (Print p str b) = Print p str (replaceConstant' n t b)
+replaceConstant' n t (BinaryOp p op l r) = BinaryOp p op (replaceConstant' n t l) (replaceConstant' n t r)
+replaceConstant' n t (Let p v vty m o) = Let p v vty (replaceConstant' n t m) (replaceConstant' (n + 1) t o)
+replaceConstant' _ _ b = b
