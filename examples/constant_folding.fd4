@@ -1,0 +1,7 @@
+let x : Nat = ifz 0 then 1 else 2
+
+let y : Nat = ifz 1 then 1 else 2
+
+let z : Nat = x + y
+
+let w : Nat = ifz z then x else y
