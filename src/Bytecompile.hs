@@ -125,8 +125,6 @@ tailcall (Let _ _ _ m n) = do   be1 <- bc m
 tailcall t           = do bt <- bc t
                           return $ bt  ++ [RETURN]
 
-type Module = [Decl Term]
-
 bytecompileModule :: MonadFD4 m => Bool -> Module -> m Bytecode
 bytecompileModule opt m = do  printFD4 $ show (moduleToTerm m)
                               m_op <- if opt then

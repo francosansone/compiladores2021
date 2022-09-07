@@ -38,11 +38,13 @@ import MonadFD4
 import TypeChecker ( tc, tcDecl, tyDecl )
 import CEK ( evalCEK )
 import Bytecompile
+import ClosureConvert
+import IR -- para debug
 
 prompt :: String
 prompt = "FD4> "
 
-{- 
+{-
  Tipo para representar las banderas disponibles en línea de comando.
 -}
 data Mode =
@@ -51,7 +53,7 @@ data Mode =
   | InteractiveCEK
   | Bytecompile
   | RunVM
-  -- | CC
+  | CC
   -- | Canon
   -- | LLVM
   -- | Build
@@ -64,7 +66,7 @@ parseMode = (,) <$>
       <|> flag' Bytecompile (long "bytecompile" <> short 'm' <> help "Compilar a la BVM")
       <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
       <|> flag Interactive Interactive ( long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva")
-  -- <|> flag' CC ( long "cc" <> short 'c' <> help "Compilar a código C")
+      <|> flag' CC ( long "cc" <> short 'c' <> help "Compilar a código C")
   -- <|> flag' Canon ( long "canon" <> short 'n' <> help "Imprimir canonicalización")
   -- <|> flag' LLVM ( long "llvm" <> short 'l' <> help "Imprimir LLVM resultante")
   -- <|> flag' Build ( long "build" <> short 'b' <> help "Compilar")
@@ -102,9 +104,19 @@ main = execParser opts >>= go
       bytecode <- bcRead (head files)
       runBC bytecode
       return ()
-    --           runOrFail $ mapM_ bytecodeRun files
-    -- go (CC,_, files) =
-    --           runOrFail $ mapM_ ccFile files
+    go (CC,_, files) = do
+              res2 <- runFD4 $ compileC (head files)
+              case res2 of
+                  Right code_c -> cWrite code_c "programa.c"
+                  _ -> return ()
+              -- do  res <- runFD4 $ compileCDebug (head files)
+              --     case res of
+              --       Right decls -> do putStrLn $ concat $ map (\x -> show x ++ "\n") decls
+              --                         res2 <- runFD4 $ compileC (head files)
+              --                         case res2 of
+              --                             Right code_c -> cWrite code_c "programa.c"
+              --                             _ -> return ()
+              --       _ -> return ()
     -- go (Canon,_, files) =
     --           runOrFail $ mapM_ canonFile files 
     -- go (LLVM,_, files) =
@@ -142,6 +154,14 @@ repl' interpreter compiler args = do
                        c <- liftIO $ interpreter x
                        b <- lift $ catchErrors $ handleCommand c
                        maybe loop (`when` loop) b
+
+compileC :: (MonadFD4 m) => FilePath -> m (String)
+compileC f = do
+  compileFile' return f
+  decls <- get
+  ppTerms <- mapM (ppDecl) (reverse $ glb decls)
+  mapM_ printFD4 ppTerms
+  return (cCompile $ reverse $ glb decls)
 
 compileByteCode :: (MonadMask m, MonadFD4 m) => Bool -> FilePath -> m Bytecode
 compileByteCode b f = do
@@ -190,17 +210,6 @@ compileFile' ev f = do
     decls <- parseIO filename program x
     mapM_ (handleDecl ev) decls
 
-compileFileNoEval :: MonadFD4 m => FilePath -> m ()
-compileFileNoEval f = do
-    printFD4 ("Abriendo "++f++"...")
-    let filename = reverse(dropWhile isSpace (reverse f))
-    x <- liftIO $ catch (readFile filename)
-               (\e -> do let err = show (e :: IOException)
-                         hPutStrLn stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err)
-                         return "")
-    decls <- parseIO filename program x
-    mapM_ (handleDecl return) decls
-
 typecheckFile ::  MonadFD4 m => Bool -> FilePath -> m ()
 typecheckFile opt f = do
     printFD4  ("Chequeando "++f)
@@ -236,16 +245,6 @@ handleDecl ev d = do
         (Decl p x tt) <- typecheckDecl d
         te <- ev tt
         addDecl (Decl p x te)
-
-handleDeclNoEval :: MonadFD4 m => SDecl STerm -> m (Maybe (Decl Term))
-handleDeclNoEval (SDeclType p b t) = do
-  let d = SDeclType p b t
-  tyDecl d
-  return Nothing
-handleDeclNoEval d = do
-        (Decl p x tt) <- typecheckDecl d
-        addDecl (Decl p x tt)
-        return $ Just (Decl p x tt)
 
 filterDecls :: SDecl STerm -> Bool
 filterDecls SDeclType {} = False
