@@ -16,3 +16,5 @@ let f5 : Nat = print "fibonacci 5 is: " (fibonacci 5)
 let f8 : Nat = print "fibonacci 8 is: " (fibonacci 8)
 
 let f10 : Nat = print "fibonacci 10 is: " (fibonacci 10)
+
+let f15 : Nat = print "fibonacci 15 is: " (fibonacci 15)

@@ -126,14 +126,14 @@ tailcall t           = do bt <- bc t
                           return $ bt  ++ [RETURN]
 
 bytecompileModule :: MonadFD4 m => Bool -> Module -> m Bytecode
-bytecompileModule opt m = do  printFD4 $ show (moduleToTerm m)
+bytecompileModule opt m = do  -- printFD4 $ show (moduleToTerm m)
                               m_op <- if opt then
-                                        optimizing 100 $ moduleToTerm m
+                                        optimizing 100 $ moduleToTerm m -- esto podría mejorarse detectando si la optimizacion funcionó
                                       else
                                         optimizing 0 $ moduleToTerm m
-                              printFD4 $ show m_op
+                              -- printFD4 $ show m_op
                               l <- bc m_op
-                              printFD4 $ show $ l ++ [PRINTN, STOP]
+                              -- printFD4 $ show $ l ++ [PRINTN, STOP]
                               return $ l ++ [PRINTN, STOP]
 
 moduleToTerm :: Module -> Term
@@ -204,7 +204,7 @@ auxPrint _ _ = error "Error en PRINT"
 
 optimizing :: MonadFD4 m => Int -> Term -> m Term
 optimizing 0 t = return t
-optimizing n t = do t_op <- constanFolding t;
+optimizing n t = do t_op <- constanFolding t
                     t_op_2 <- constantPropagation t_op
                     optimizing (n-1) t_op_2
 

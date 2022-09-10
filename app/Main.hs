@@ -39,7 +39,7 @@ import TypeChecker ( tc, tcDecl, tyDecl )
 import CEK ( evalCEK )
 import Bytecompile
 import ClosureConvert
-import IR -- para debug
+-- import IR -- para debug
 
 prompt :: String
 prompt = "FD4> "
@@ -54,9 +54,6 @@ data Mode =
   | Bytecompile
   | RunVM
   | CC
-  -- | Canon
-  -- | LLVM
-  -- | Build
 
 -- | Parser de banderas
 parseMode :: Parser (Mode,Bool)
@@ -67,9 +64,6 @@ parseMode = (,) <$>
       <|> flag' RunVM (long "runVM" <> short 'r' <> help "Ejecutar bytecode en la BVM")
       <|> flag Interactive Interactive ( long "interactive" <> short 'i' <> help "Ejecutar en forma interactiva")
       <|> flag' CC ( long "cc" <> short 'c' <> help "Compilar a código C")
-  -- <|> flag' Canon ( long "canon" <> short 'n' <> help "Imprimir canonicalización")
-  -- <|> flag' LLVM ( long "llvm" <> short 'l' <> help "Imprimir LLVM resultante")
-  -- <|> flag' Build ( long "build" <> short 'b' <> help "Compilar")
       )
    -- reemplazar por la siguiente línea para habilitar opción
    <*> flag False True (long "optimize" <> short 'o' <> help "Optimizar código")
@@ -109,20 +103,6 @@ main = execParser opts >>= go
               case res2 of
                   Right code_c -> cWrite code_c "programa.c"
                   _ -> return ()
-              -- do  res <- runFD4 $ compileCDebug (head files)
-              --     case res of
-              --       Right decls -> do putStrLn $ concat $ map (\x -> show x ++ "\n") decls
-              --                         res2 <- runFD4 $ compileC (head files)
-              --                         case res2 of
-              --                             Right code_c -> cWrite code_c "programa.c"
-              --                             _ -> return ()
-              --       _ -> return ()
-    -- go (Canon,_, files) =
-    --           runOrFail $ mapM_ canonFile files 
-    -- go (LLVM,_, files) =
-    --           runOrFail $ mapM_ llvmFile files
-    -- go (Build,_, files) =
-    --           runOrFail $ mapM_ buildFile files
 
 runOrFail :: FD4 a -> IO a
 runOrFail m = do

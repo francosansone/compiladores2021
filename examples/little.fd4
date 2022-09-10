@@ -1,3 +1,7 @@
-let succ (x : Nat) : Nat = print "hola que tal" x + 1
+let a : Nat = 2
+let f (y : Nat) : Nat =
+    let b (x: Nat) : Nat = 10 in
+    y + b 5
+let z : Nat = f 3
 
-let x : Nat = succ 1
+let f5 : Nat = print "f 5 is: " (f 5)
