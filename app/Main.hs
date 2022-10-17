@@ -196,12 +196,14 @@ typecheckFile opt f = do
     decls <- loadFile f
     sppTerms <- mapM sppDecl decls
     -- ppterms <- mapM (typecheckDecl >=> ppDecl) decls
+    printFD4  ("\nImprimiendo expresiones con azucar...")
     mapM_ printFD4 sppTerms
     mapM_ tyDecl decls
     sppTerms1 <- mapM sppDecl (filter filterDecls decls)
     sppTerms2 <- mapM sppDecl (filter (not . filterDecls) decls)
     -- mapM_ printFD4 sppTerms2
     ppTerms <- mapM (typecheckDecl >=> ppDecl) (filter filterDecls decls)
+    printFD4  ("\n\nImprimiendo expresiones sin azucar...")
     mapM_ printFD4 ppTerms
     -- mapM_ printFD4 ppTerms
 
@@ -212,8 +214,8 @@ parseIO filename p x = case runP p x filename of
 
 typecheckDecl :: MonadFD4 m => SDecl STerm -> m (Decl Term)
 typecheckDecl sd = do
-        Decl p x t <- desugarSdecl sd
-        let dd = Decl p x (elab t)
+        Decl p x ty t <- desugarSdecl sd
+        let dd = Decl p x ty (elab t)
         tcDecl dd
         return dd
 
@@ -222,9 +224,9 @@ handleDecl _ (SDeclType p b t) = do
   let d = SDeclType p b t
   tyDecl d
 handleDecl ev d = do
-        (Decl p x tt) <- typecheckDecl d
+        (Decl p x ty tt) <- typecheckDecl d
         te <- ev tt
-        addDecl (Decl p x te)
+        addDecl (Decl p x ty te)
 
 filterDecls :: SDecl STerm -> Bool
 filterDecls SDeclType {} = False

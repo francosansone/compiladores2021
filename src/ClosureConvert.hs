@@ -88,7 +88,7 @@ runCC = runCC' 0
 
 runCC' :: Int -> [Decl Term] -> [IrDecl]
 runCC' c [] = []
-runCC' c ((Decl _ name body):decls) =
+runCC' c ((Decl _ name _ body):decls) =
     let ((ir, new_c), ir_decls) = runWriter $ runStateT (closureConvert body) c -- no tengo muy claro esto, pero tipa
         rest = (runCC' new_c decls)
     in (IrVal name ir):(ir_decls ++ rest)

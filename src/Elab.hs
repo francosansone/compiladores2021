@@ -12,6 +12,8 @@ fully named (@NTerm) a locally closed (@Term@)
 
 module Elab ( elab, desugarSdecl, elabAndDesugar ) where
 
+import System.IO ( hPrint, stderr, hPutStrLn ) -- for testting
+
 import Lang
 import Subst
 import MonadFD4 (failPosFD4, MonadFD4, lookupSTy)
@@ -52,11 +54,30 @@ elab' env (Let p v vty def body) = Let p v vty (elab' env def) (close v (elab' (
 desugarSdecl :: MonadFD4 m => SDecl STerm -> m (Decl NTerm)
 desugarSdecl (SDecl p True n sty binders body) = do
   let l = (n, sty):binders
-  b <- desugarSterm $ SFix p ((n, typeFromBinders l):binders) body
-  return (Decl p n b)
+  let sbty = typeFromBinders l
+  b <- desugarSterm $ SFix p ((n, sbty):binders) body
+  ty <- slookupTy sty
+  typeExist p ty
+  if length binders == 0 then
+    return (Decl p n (fromJust ty) b)
+  else
+    do
+      bty <- slookupTy sbty
+      typeExist p bty
+      return (Decl p n (fromJust bty) b)
 desugarSdecl (SDecl p False n sty binders body) = do
   b <- desugarSterm $ SLam p binders body
-  return (Decl p n b)
+  ty <- slookupTy sty
+  typeExist p ty
+  if length binders == 0 then
+    do
+      return (Decl p n (fromJust ty) b)
+  else
+    do
+      let sbty = typeFromBinders binders
+      bty <- slookupTy sbty
+      typeExist p bty
+      return (Decl p n (FunTy (fromJust ty) (fromJust bty)) b)
 desugarSdecl (SDeclType p n sty) = failPosFD4 p "desugarSdecl: Esto no debería haber pasado"
 
 

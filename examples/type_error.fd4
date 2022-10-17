@@ -1,0 +1,3 @@
+let y (x : Nat) (z : Nat) : Nat = fun (x : Nat) -> fun (z:Nat) -> fun (y : Nat) -> 5
+
+let j (x : Nat) : Nat = y

@@ -137,8 +137,8 @@ bytecompileModule opt m = do  -- printFD4 $ show (moduleToTerm m)
                               return $ l ++ [PRINTN, STOP]
 
 moduleToTerm :: Module -> Term
-moduleToTerm [Decl p n b] = b
-moduleToTerm ((Decl p n b):ms) = Let p n NatTy b (close n (moduleToTerm ms))
+moduleToTerm [Decl p n _ b] = b
+moduleToTerm ((Decl p n _ b):ms) = Let p n NatTy b (close n (moduleToTerm ms))
 moduleToTerm [] = error "moduleToTerm: No deberia haber pasado"
 
 -- | Toma un bytecode, lo codifica y lo escribe un archivo 
