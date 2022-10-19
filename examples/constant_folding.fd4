@@ -2,6 +2,6 @@ let x : Nat = ifz 0 then 1 else 2
 
 let y : Nat = ifz 1 then 1 else 2
 
-let z : Nat = x + y
+let z : Nat =  x
 
-let w : Nat = ifz z then x else y
+let w : Nat = let a : Nat = 4 in ifz a then x else y

@@ -39,6 +39,7 @@ import TypeChecker ( tc, tcDecl, tyDecl )
 import CEK ( evalCEK )
 import Bytecompile
 import ClosureConvert
+import Optimizing
 -- import IR -- para debug
 
 prompt :: String
@@ -81,25 +82,25 @@ main = execParser opts >>= go
      <> header "Compilador de FD4 de la materia Compiladores 2021" )
 
     go :: (Mode,Bool,[FilePath]) -> IO ()
-    go (Interactive,_,files) =
-              do runFD4 (runInputT defaultSettings (repl Interactive files))
+    go (Interactive, opt, files) =
+              do runFD4 (runInputT defaultSettings (repl Interactive files opt))
                  return ()
     go (Typecheck,opt, files) =
               runOrFail $ mapM_ (typecheckFile opt) files
-    go (InteractiveCEK,_, files) =
-              do runFD4 (runInputT defaultSettings (repl InteractiveCEK files))
+    go (InteractiveCEK, opt, files) =
+              do runFD4 (runInputT defaultSettings (repl InteractiveCEK files opt))
                  return ()
     go (Bytecompile, opt, files) =
               do res <- runFD4 (runInputT defaultSettings  (lift $ catchErrors $ mapM (compileByteCode opt) files))
                  case res of
                    Right (Just b) -> bcWrite (concat b) "a.out"
                    _ -> return ()
-    go (RunVM,_,files) = do
+    go (RunVM, _, files) = do
       bytecode <- bcRead (head files)
       runBC bytecode
       return ()
-    go (CC,_, files) = do
-              res2 <- runFD4 $ compileC (head files)
+    go (CC, opt, files) = do
+              res2 <- runFD4 $ compileC (head files) opt
               case res2 of
                   Right code_c -> cWrite code_c "programa.c"
                   _ -> return ()
@@ -113,9 +114,9 @@ runOrFail m = do
       exitWith (ExitFailure 1)
     Right v -> return v
 
-repl :: (MonadFD4 m, MonadMask m) => Mode -> [FilePath] -> InputT m ()
-repl InteractiveCEK args = repl' interpretCommandCEK compileFilesCEK args
-repl _ args = repl' interpretCommand compileFiles args
+repl :: (MonadFD4 m, MonadMask m) => Mode -> [FilePath] -> Bool -> InputT m ()
+repl InteractiveCEK args opt = repl' interpretCommandCEK (compileFilesCEK opt) args
+repl _ args opt = repl' interpretCommand compileFiles args
 
 repl' :: (MonadMask m, MonadFD4 m) => (String -> IO Command) -> ([FilePath] -> m ()) -> [FilePath] -> InputT m ()
 repl' interpreter compiler args = do
@@ -135,9 +136,9 @@ repl' interpreter compiler args = do
                        b <- lift $ catchErrors $ handleCommand c
                        maybe loop (`when` loop) b
 
-compileC :: (MonadFD4 m) => FilePath -> m (String)
-compileC f = do
-  compileFile' return f
+compileC :: (MonadFD4 m) => FilePath -> Bool -> m (String)
+compileC f opt = do
+  compileFile' return f opt
   decls <- get
   ppTerms <- mapM (ppDecl) (reverse $ glb decls)
   mapM_ printFD4 ppTerms
@@ -145,7 +146,7 @@ compileC f = do
 
 compileByteCode :: (MonadMask m, MonadFD4 m) => Bool -> FilePath -> m Bytecode
 compileByteCode b f = do
-    compileFile' return f
+    compileFile' return f b
     s <- get
     bytecompileModule b (reverse $ glb s)
 
@@ -156,12 +157,12 @@ compileFiles (x:xs) = do
         compileFile x
         compileFiles xs
 
-compileFilesCEK ::  MonadFD4 m => [FilePath] -> m ()
-compileFilesCEK []     = return ()
-compileFilesCEK (x:xs) = do
+compileFilesCEK ::  MonadFD4 m => Bool -> [FilePath] -> m ()
+compileFilesCEK _ []    = return ()
+compileFilesCEK opt (x:xs) = do
         modify (\s -> s { lfile = x, inter = False })
-        compileFileCEK x
-        compileFilesCEK xs
+        compileFileCEK opt x
+        compileFilesCEK opt xs
 
 loadFile ::  MonadFD4 m => FilePath -> m [SDecl STerm]
 loadFile f = do
@@ -174,13 +175,13 @@ loadFile f = do
     parseIO filename program x
 
 compileFile ::  MonadFD4 m => FilePath -> m ()
-compileFile = compileFile' eval
+compileFile f = compileFile' eval f False
 
-compileFileCEK ::  MonadFD4 m => FilePath -> m ()
-compileFileCEK = compileFile' evalCEK
+compileFileCEK ::  MonadFD4 m => Bool -> FilePath -> m ()
+compileFileCEK opt f = compileFile' evalCEK f opt
 
-compileFile' :: MonadFD4 m => (Term -> m Term) -> FilePath -> m ()
-compileFile' ev f = do
+compileFile' :: MonadFD4 m => (Term -> m Term) -> FilePath -> Bool -> m ()
+compileFile' ev f opt = do
     printFD4 ("Abriendo "++f++"...")
     let filename = reverse(dropWhile isSpace (reverse f))
     x <- liftIO $ catch (readFile filename)
@@ -188,7 +189,25 @@ compileFile' ev f = do
                          hPutStrLn stderr ("No se pudo abrir el archivo " ++ filename ++ ": " ++ err)
                          return "")
     decls <- parseIO filename program x
-    mapM_ (handleDecl ev) decls
+    if opt then
+      do
+        -- explico paso a paso este proceso carente de prolijidadL:
+        mapM_ (handleDecl return) decls                 -- agregar declaraciones
+        st <- get                                       -- obtenerlas
+        -- ppTerms <- mapM (ppDecl) (reverse $ glb st)
+        -- printFD4 "Expresiones sin optimizar..."
+        -- mapM_ printFD4 ppTerms
+        printFD4 "\nOptimizando..."
+        decls_opt <- optimizing 100 (reverse $ glb st)  -- optimizarlas
+        modify (\s -> s { glb = [], cantDecl = 0 })     -- reinicial estado
+        mapM_ (handleDecl2 ev) decls_opt                -- evaluarlas y agregarlas
+        new_st <- get
+        ppTerms_opt <- mapM (ppDecl) (reverse $ glb new_st)
+        mapM_ printFD4 ppTerms_opt
+    else
+      do
+        printFD4 "No se corren optimizaciones..."
+        mapM_ (handleDecl ev) decls
 
 typecheckFile ::  MonadFD4 m => Bool -> FilePath -> m ()
 typecheckFile opt f = do
@@ -198,14 +217,24 @@ typecheckFile opt f = do
     -- ppterms <- mapM (typecheckDecl >=> ppDecl) decls
     printFD4  ("\nImprimiendo expresiones con azucar...")
     mapM_ printFD4 sppTerms
+
     mapM_ tyDecl decls
     sppTerms1 <- mapM sppDecl (filter filterDecls decls)
     sppTerms2 <- mapM sppDecl (filter (not . filterDecls) decls)
     -- mapM_ printFD4 sppTerms2
-    ppTerms <- mapM (typecheckDecl >=> ppDecl) (filter filterDecls decls)
+    actual_decls <- mapM typecheckDecl (filter filterDecls decls)
+    ppTerms <- mapM ppDecl actual_decls
     printFD4  ("\n\nImprimiendo expresiones sin azucar...")
     mapM_ printFD4 ppTerms
-    -- mapM_ printFD4 ppTerms
+
+    if opt then
+      do
+        new_decls <- optimizing 100 (actual_decls)
+        printFD4  ("\n\nImprimiendo expresiones optimizadas...")
+        ppTerms_opt <- mapM ppDecl new_decls
+        mapM_ printFD4 ppTerms_opt
+    else
+      return ()
 
 parseIO ::  MonadFD4 m => String -> P a -> String -> m a
 parseIO filename p x = case runP p x filename of
@@ -225,6 +254,11 @@ handleDecl _ (SDeclType p b t) = do
   tyDecl d
 handleDecl ev d = do
         (Decl p x ty tt) <- typecheckDecl d
+        te <- ev tt
+        addDecl (Decl p x ty te)
+
+handleDecl2 :: MonadFD4 m => (Term -> m Term) -> Decl Term -> m ()
+handleDecl2 ev d@(Decl p x ty tt) = do
         te <- ev tt
         addDecl (Decl p x ty te)
 
