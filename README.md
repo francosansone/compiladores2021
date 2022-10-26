@@ -37,8 +37,12 @@ Usage: compiladores-exe [(-t|--typecheck) | (-i|--interactive)] [FILES...]
   Compilador de FD4
 
 Available options:
-  -t,--typecheck           Solo chequear tipos
+  -t,--typecheck           Chequear tipos e imprimir el término
+  -k,--interactiveCEK      Ejecutar interactivamente en la CEK
+  -m,--bytecompile         Compilar a la BVM
+  -r,--runVM               Ejecutar bytecode en la BVM
   -i,--interactive         Ejecutar en forma interactiva
-  -k, --interactiveCEK     Ejecutar en forma interactiva usando la VM CEK
+  -c,--cc                  Compilar a código C
+  -o,--optimize            Optimizar código
   -h,--help                Show this help text
 ```
