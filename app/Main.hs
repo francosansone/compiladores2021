@@ -100,9 +100,9 @@ main = execParser opts >>= go
       runBC bytecode
       return ()
     go (CC, opt, files) = do
-              res2 <- runFD4 $ compileC (head files) opt
+              res2 <- runFD4 (runInputT defaultSettings  (lift $ catchErrors $ compileC opt (head files)))
               case res2 of
-                  Right code_c -> cWrite code_c "programa.c"
+                  Right (Just code_c) -> cWrite code_c "programa.c"
                   _ -> return ()
 
 runOrFail :: FD4 a -> IO a
@@ -115,11 +115,11 @@ runOrFail m = do
     Right v -> return v
 
 repl :: (MonadFD4 m, MonadMask m) => Mode -> [FilePath] -> Bool -> InputT m ()
-repl InteractiveCEK args opt = repl' interpretCommandCEK (compileFilesCEK opt) args
-repl _ args opt = repl' interpretCommand compileFiles args
+repl InteractiveCEK args opt = repl' interpretCommandCEK (compileFilesCEK opt) opt args
+repl _ args opt = repl' interpretCommand (compileFiles opt) opt args
 
-repl' :: (MonadMask m, MonadFD4 m) => (String -> IO Command) -> ([FilePath] -> m ()) -> [FilePath] -> InputT m ()
-repl' interpreter compiler args = do
+repl' :: (MonadMask m, MonadFD4 m) => (String -> IO Command) -> ([FilePath] -> m ()) -> Bool -> [FilePath] -> InputT m ()
+repl' interpreter compiler opt args = do
        lift $ catchErrors $ compiler args
        s <- lift get
        when (inter s) $ liftIO $ putStrLn
@@ -133,15 +133,15 @@ repl' interpreter compiler args = do
                Just "" -> loop
                Just x -> do
                        c <- liftIO $ interpreter x
-                       b <- lift $ catchErrors $ handleCommand c
+                       b <- lift $ catchErrors $ handleCommand c opt
                        maybe loop (`when` loop) b
 
-compileC :: (MonadFD4 m) => FilePath -> Bool -> m (String)
-compileC f opt = do
+compileC :: (MonadFD4 m) => Bool -> FilePath -> m (String)
+compileC opt f = do
   compileFile' return f opt
   decls <- get
-  ppTerms <- mapM (ppDecl) (reverse $ glb decls)
-  mapM_ printFD4 ppTerms
+  -- ppTerms <- mapM (ppDecl) (reverse $ glb decls)
+  -- mapM_ printFD4 ppTerms
   return (cCompile $ reverse $ glb decls)
 
 compileByteCode :: (MonadMask m, MonadFD4 m) => Bool -> FilePath -> m Bytecode
@@ -150,12 +150,12 @@ compileByteCode b f = do
     s <- get
     bytecompileModule b (reverse $ glb s)
 
-compileFiles ::  MonadFD4 m => [FilePath] -> m ()
-compileFiles []     = return ()
-compileFiles (x:xs) = do
+compileFiles ::  MonadFD4 m => Bool -> [FilePath] -> m ()
+compileFiles opt []     = return ()
+compileFiles opt (x:xs) = do
         modify (\s -> s { lfile = x, inter = False })
-        compileFile x
-        compileFiles xs
+        compileFile opt x
+        compileFiles opt xs
 
 compileFilesCEK ::  MonadFD4 m => Bool -> [FilePath] -> m ()
 compileFilesCEK _ []    = return ()
@@ -174,8 +174,8 @@ loadFile f = do
     setLastFile filename
     parseIO filename program x
 
-compileFile ::  MonadFD4 m => FilePath -> m ()
-compileFile f = compileFile' eval f False
+compileFile ::  MonadFD4 m => Bool -> FilePath -> m ()
+compileFile opt f = compileFile' eval f opt
 
 compileFileCEK ::  MonadFD4 m => Bool -> FilePath -> m ()
 compileFileCEK opt f = compileFile' evalCEK f opt
@@ -201,9 +201,9 @@ compileFile' ev f opt = do
         decls_opt <- optimizing 100 (reverse $ glb st)  -- optimizarlas
         modify (\s -> s { glb = [], cantDecl = 0 })     -- reinicial estado
         mapM_ (handleDecl2 ev) decls_opt                -- evaluarlas y agregarlas
-        new_st <- get
-        ppTerms_opt <- mapM (ppDecl) (reverse $ glb new_st)
-        mapM_ printFD4 ppTerms_opt
+        -- new_st <- get
+        -- ppTerms_opt <- mapM (ppDecl) (reverse $ glb new_st)
+        -- mapM_ printFD4 ppTerms_opt
     else
       do
         printFD4 "No se corren optimizaciones..."
@@ -254,7 +254,9 @@ handleDecl _ (SDeclType p b t) = do
   tyDecl d
 handleDecl ev d = do
         (Decl p x ty tt) <- typecheckDecl d
-        te <- ev tt
+        res <- optimizing 5 [(Decl p x ty tt)]
+        let (Decl p' x' ty' tt') = head res
+        te <- ev tt'
         addDecl (Decl p x ty te)
 
 handleDecl2 :: MonadFD4 m => (Term -> m Term) -> Decl Term -> m ()
@@ -334,8 +336,8 @@ helpTxt cs
 
 -- -- | 'handleCommand' interpreta un comando y devuelve un booleano
 -- -- indicando si se debe salir del programa o no.
-handleCommand ::  MonadFD4 m => Command  -> m Bool
-handleCommand cmd = do
+handleCommand ::  MonadFD4 m => Command -> Bool -> m Bool
+handleCommand cmd opt = do
    s@GlEnv {..} <- get
    case cmd of
        Quit   ->  return False
@@ -347,9 +349,9 @@ handleCommand cmd = do
                   do  case c of
                           CompileInteractive e -> compilePhrase e
                           CompileInteractiveCEK e -> compilePhraseCEK e
-                          CompileFile f        -> put (s {lfile=f, cantDecl=0}) >> compileFile f
+                          CompileFile f        -> put (s {lfile=f, cantDecl=0}) >> compileFile opt f
                       return True
-       Reload ->  eraseLastFileDecls >> (getLastFile >>= compileFile) >> return True
+       Reload ->  eraseLastFileDecls >> (getLastFile >>= (compileFile opt)) >> return True
        PPrint e   -> printPhrase e >> return True
        Type e    -> typeCheckPhrase e >> return True
 
