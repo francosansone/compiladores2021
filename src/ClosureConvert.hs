@@ -78,9 +78,10 @@ closureConvert (IfZ _ t a b) = do ir_t <- closureConvert t
                                   ir_b <- closureConvert b
                                   return $ IrIfZ ir_t ir_a ir_b
 
-closureConvert (Let _ n _ t u) = do ir_t <- closureConvert t
-                                    ir_u <- closureConvert (open n u)
-                                    return $ IrLet n ir_t ir_u
+closureConvert (Let _ n _ t u) = do new_name <- getFreshName ()
+                                    ir_t <- closureConvert t
+                                    ir_u <- closureConvert (open new_name u)
+                                    return $ IrLet new_name ir_t ir_u
 
 -- Traduzco a IrVal para estar acorde con la funcion fd4Main.
 runCC :: [Decl Term] -> [IrDecl]
