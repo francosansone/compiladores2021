@@ -13,3 +13,6 @@ app/Main
 *.bbl
 compiladores.cabal
 material/
+programa.c
+a.out
+.vscode/
