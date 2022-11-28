@@ -1,0 +1,9 @@
+let s'uma (x:Nat) : Nat -> Nat =
+	  fun (y:Nat) -> y + x
+
+let rec map (f:Nat->Nat) (xs:Nat) : Nat = 
+	    24
+
+let x : Nat = map (s'uma 5) 6
+
+let y : Nat = print "x = " x
