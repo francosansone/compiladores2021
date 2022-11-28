@@ -1,0 +1,6 @@
+let suma (x:Nat) : Nat -> Nat =
+	  fun (y:Nat) -> y + x
+
+let y : Nat = suma 2 3
+
+let z : Nat = print "y = " y

@@ -53,31 +53,23 @@ elab' env (Let p v vty def body) = Let p v vty (elab' env def) (close v (elab' (
 
 desugarSdecl :: MonadFD4 m => SDecl STerm -> m (Decl NTerm)
 desugarSdecl (SDecl p True n sty binders body) = do
-  let l = (n, sty):binders
-  let sbty = typeFromBinders l
+  ty <- slookupTy sty
+  typeExist p ty
+  let sbty = typeFromBinders binders sty
   b <- desugarSterm $ SFix p ((n, sbty):binders) body
-  ty <- slookupTy sty
-  typeExist p ty
-  if length binders == 0 then
-    return (Decl p n (fromJust ty) b)
-  else
-    do
-      bty <- slookupTy sbty
-      typeExist p bty
-      return (Decl p n (fromJust bty) b)
+  bty <- slookupTy sbty
+  typeExist p bty
+  return (Decl p n (fromJust bty) b)
+
 desugarSdecl (SDecl p False n sty binders body) = do
-  b <- desugarSterm $ SLam p binders body
   ty <- slookupTy sty
   typeExist p ty
-  if length binders == 0 then
-    do
-      return (Decl p n (fromJust ty) b)
-  else
-    do
-      let sbty = typeFromBinders binders
-      bty <- slookupTy sbty
-      typeExist p bty
-      return (Decl p n (FunTy (fromJust ty) (fromJust bty)) b)
+  let sbty = typeFromBinders binders sty
+  b <- desugarSterm $ SLam p binders body
+  bty <- slookupTy sbty
+  typeExist p bty
+  return (Decl p n (fromJust bty) b)
+
 desugarSdecl (SDeclType p n sty) = failPosFD4 p "desugarSdecl: Esto no debería haber pasado"
 
 
@@ -121,10 +113,10 @@ desugarSterm (SLet True info n sty binders sexp1 sexp2) = do
   ty <- slookupTy sty
   typeExist info ty
   let binders' = (n, sty):binders
-  let t1 = typeFromBinders binders'
+  let t1 = typeFromBinders binders' sty
   t2 <- slookupTy t1
   exp2 <- desugarSterm sexp2
-  exp1 <- desugarSterm (SFix info ((n, typeFromBinders binders'):binders) sexp1)
+  exp1 <- desugarSterm (SFix info ((n, t1):binders) sexp1)
   return (Let info n (fromJust t2)  exp1 exp2)
 desugarSterm _ = failPosFD4 NoPos "desugarSterm: esto no deberia haber pasado"
 
@@ -146,7 +138,6 @@ typeExist :: MonadFD4 m => Pos -> Maybe Ty -> m ()
 typeExist p ty = when (isNothing ty) $ do
     failPosFD4 p "El tipo no existe"
 
-typeFromBinders :: [(Name, STy)] -> STy
-typeFromBinders [(n, t)] = t
-typeFromBinders ((x, t):xs) = SFunTy t $ typeFromBinders xs
-typeFromBinders [] = errorWithoutStackTrace "typeFromBinders"
+typeFromBinders :: [(Name, STy)] -> STy -> STy
+typeFromBinders [] ret_ty = ret_ty
+typeFromBinders ((x, t):xs) ret_ty = SFunTy t $ typeFromBinders xs ret_ty
